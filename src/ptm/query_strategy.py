@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Query strategy for pricing discovery via Tavily."""
 
 from urllib.parse import urlparse

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Rule-based pricing snippet extraction (NO LLM hallucination)."""
 
 import re

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """JSON output generator for automation."""
 
 import json

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Evidence-only verdict logic (NO LLM required)."""
 
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Money parsing and cadence detection (NO silent normalization)."""
 
 import re

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Tavily search client for real-time web data retrieval."""
 
 from urllib.parse import urlparse

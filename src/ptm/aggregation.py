@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Competitor pricing aggregation."""
 
 from urllib.parse import urlparse

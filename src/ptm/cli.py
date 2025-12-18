@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """CLI entrypoint for Pricing Truth Machine."""
 
 import sys

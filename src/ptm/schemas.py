@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Pydantic schemas for Pricing Truth Machine."""
 
 from enum import Enum

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Optional LLM reasoning mode (OpenAI) - enhances interpretation without violating real-data policy."""
 
 import json
