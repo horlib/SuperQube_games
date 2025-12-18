@@ -92,6 +92,18 @@ def _call_openai_for_reasoning(
         "Content-Type": "application/json",
     }
 
+    # Models that support response_format json_object
+    models_with_json_support = [
+        "gpt-4-turbo",
+        "gpt-4-turbo-preview",
+        "gpt-4-1106-preview",
+        "gpt-4-0125-preview",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-3.5-turbo-1106",
+    ]
+    
+    # Build payload - conditionally include response_format
     payload = {
         "model": model,
         "messages": [
@@ -102,18 +114,35 @@ def _call_openai_for_reasoning(
                     "the provided evidence. You MUST NOT estimate, guess, or "
                     "invent any prices, benchmarks, or data. Every conclusion "
                     "must reference specific evidence. If data is missing, "
-                    "explicitly state the uncertainty."
+                    "explicitly state the uncertainty. "
+                    "You MUST respond with valid JSON only."
                 ),
             },
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.3,  # Lower temperature for more deterministic output
-        "response_format": {"type": "json_object"},
     }
+    
+    # Only add response_format if model supports it
+    if any(model.startswith(supported) for supported in models_with_json_support):
+        payload["response_format"] = {"type": "json_object"}
 
     try:
         with httpx.Client(timeout=30.0) as client:
             response = client.post(url, json=payload, headers=headers)
+            
+            # Better error handling - show response details
+            if not response.is_success:
+                error_detail = response.text
+                try:
+                    error_json = response.json()
+                    error_detail = error_json.get("error", {}).get("message", error_detail)
+                except Exception:
+                    pass
+                raise LLMReasoningError(
+                    f"OpenAI API error {response.status_code}: {error_detail}"
+                )
+            
             response.raise_for_status()
             data = response.json()
 
@@ -126,6 +155,17 @@ def _call_openai_for_reasoning(
             if isinstance(insights, list):
                 return insights
             return []
+    except httpx.HTTPStatusError as e:
+        error_detail = "Unknown error"
+        if e.response is not None:
+            try:
+                error_json = e.response.json()
+                error_detail = error_json.get("error", {}).get("message", str(e))
+            except Exception:
+                error_detail = e.response.text
+        raise LLMReasoningError(
+            f"OpenAI API HTTP error {e.response.status_code if e.response else 'unknown'}: {error_detail}"
+        ) from e
     except Exception as e:
         raise LLMReasoningError(f"OpenAI API call failed: {e}") from e
 
@@ -150,23 +190,42 @@ def _build_reasoning_prompt(
     for cp in evidence_bundle.competitor_pricing[:5]:  # Limit to 5 competitors
         snippets.extend(cp.evidence_snippets[:3])  # 3 snippets per competitor
 
+    # Build evidence section safely
+    evidence_lines = [f"- {snippet[:200]}..." for snippet in snippets[:10]] if snippets else ["- No evidence snippets available"]
+    evidence_text = "\n".join(evidence_lines)
+    
+    # Build gaps section safely
+    gaps_lines = [f"- {gap}" for gap in verdict.gaps[:5]] if verdict.gaps else ["- No gaps identified"]
+    gaps_text = "\n".join(gaps_lines)
+    
+    # Build reasons section safely
+    reasons_lines = [f"- {reason}" for reason in verdict.key_reasons] if verdict.key_reasons else ["- No reasons provided"]
+    reasons_text = "\n".join(reasons_lines)
+    
+    # Format confidence safely
+    confidence_str = f"{float(verdict.confidence):.2f}"
+    
     prompt = f"""Analyze the pricing verdict for {product.name} ({product.url}).
 
 Current Price: {product.current_price}
 Verdict Status: {verdict.status.value}
-Confidence: {verdict.confidence:.2f}
+Confidence: {confidence_str}
 
 Competitor Pricing Evidence:
-{chr(10).join(f"- {snippet[:200]}..." for snippet in snippets[:10])}
+{evidence_text}
 
 Gaps in Data:
-{chr(10).join(f"- {gap}" for gap in verdict.gaps[:5])}
+{gaps_text}
 
 Current Reasoning:
-{chr(10).join(f"- {reason}" for reason in verdict.key_reasons)}
+{reasons_text}
 
 Provide additional insights based ONLY on the evidence above. Do NOT estimate or invent any data.
-Return JSON with "additional_insights" array of strings, each referencing specific evidence.
+Return ONLY valid JSON with this exact structure:
+{{
+  "additional_insights": ["insight 1", "insight 2", ...]
+}}
+Each insight should be a string referencing specific evidence. Do not include any text outside the JSON.
 """
 
     return prompt

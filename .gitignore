@@ -104,3 +104,6 @@ logs/
 # Backup files
 *.bak
 *.backup
+
+# Output files
+output/

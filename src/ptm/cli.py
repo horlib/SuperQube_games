@@ -103,7 +103,7 @@ def run(
 
         sources = query_strategy.discover_pricing_sources(product_input)
 
-        console.print(f"[green]✓ Found {len(sources)} sources[/green]")
+        console.print(f"[green][OK] Found {len(sources)} sources[/green]")
 
         # Log source domains
         if sources:
@@ -126,7 +126,7 @@ def run(
         console.print("\n[yellow]Extracting competitor pricing...[/yellow]")
         competitor_pricing = aggregate_competitor_pricing(sources)
 
-        console.print(f"[green]✓ Analyzed {len(competitor_pricing)} competitors[/green]")
+        console.print(f"[green][OK] Analyzed {len(competitor_pricing)} competitors[/green]")
 
         # Log competitor details
         comparable_count = sum(
@@ -174,21 +174,21 @@ def run(
         # Log verdict provenance
         console.print("\n[dim]Verdict Provenance:[/dim]")
         console.print(
-            f"[dim]  • Based on {len(verdict.evidence_bundle.tavily_sources)} evidence sources[/dim]"
+            f"[dim]  - Based on {len(verdict.evidence_bundle.tavily_sources)} evidence sources[/dim]"
         )
-        console.print(f"[dim]  • {len(verdict.citations)} citations[/dim]")
+        console.print(f"[dim]  - {len(verdict.citations)} citations[/dim]")
         if verdict.gaps:
-            console.print(f"[dim]  • {len(verdict.gaps)} data gaps identified[/dim]")
+            console.print(f"[dim]  - {len(verdict.gaps)} data gaps identified[/dim]")
 
         if verdict.key_reasons:
             console.print("\n[bold]Key Reasons:[/bold]")
             for reason in verdict.key_reasons:
-                console.print(f"  • {reason}")
+                console.print(f"  - {reason}")
 
         if verdict.gaps:
             console.print("\n[yellow]Gaps & Limitations:[/yellow]")
             for gap in verdict.gaps[:5]:  # Show first 5
-                console.print(f"  • {gap}")
+                console.print(f"  - {gap}")
 
         # Generate reports
         console.print(f"\n[yellow]Generating reports in {outdir}...[/yellow]")
@@ -197,8 +197,8 @@ def run(
         generate_markdown_report(verdict, outdir / "report.md")
         generate_json_report(verdict, outdir / "report.json")
 
-        console.print(f"[green]✓ Markdown report: {outdir / 'report.md'}[/green]")
-        console.print(f"[green]✓ JSON report: {outdir / 'report.json'}[/green]")
+        console.print(f"[green][OK] Markdown report: {outdir / 'report.md'}[/green]")
+        console.print(f"[green][OK] JSON report: {outdir / 'report.json'}[/green]")
 
         console.print("\n[bold green]Analysis complete![/bold green]")
 
