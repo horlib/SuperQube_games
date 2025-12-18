@@ -71,11 +71,20 @@ def aggregate_competitor_pricing(
 
         # Try to parse and normalize prices
         normalized_monthly_usd = None
+        cadence = None
         gaps = []
 
         # Try to normalize first valid price
+        # Use snippet context to help detect cadence
         for price_text in price_texts:
-            parsed = parse_price(price_text)
+            # Find snippet containing this price text for context
+            context = None
+            for snippet in snippets:
+                if price_text.lower() in snippet.lower():
+                    context = snippet
+                    break
+            
+            parsed = parse_price(price_text, context=context)
             if parsed:
                 normalized = normalize_to_monthly_usd(
                     parsed, fx_rates=fx_rates, seat_count=seat_count
@@ -83,8 +92,13 @@ def aggregate_competitor_pricing(
                 if normalized.gaps:
                     gaps.extend(normalized.gaps)
                 else:
-                    normalized_monthly_usd = normalized.monthly_usd
-                    break  # Use first successfully normalized price
+                    # Only set normalized price if it's positive (no gaps)
+                    if normalized.monthly_usd > 0:
+                        normalized_monthly_usd = normalized.monthly_usd
+                        cadence = parsed.cadence  # Store cadence for reporting
+                        break  # Use first successfully normalized price
+                    else:
+                        gaps.extend(normalized.gaps)
 
         # If no normalized price, collect all gaps
         if normalized_monthly_usd is None and not gaps:
@@ -96,6 +110,7 @@ def aggregate_competitor_pricing(
             extracted_price_texts=price_texts,
             evidence_snippets=snippets[:10],  # Limit to first 10 snippets
             normalized_monthly_usd=normalized_monthly_usd,
+            cadence=cadence if 'cadence' in locals() else None,
             gaps=gaps,
         )
 

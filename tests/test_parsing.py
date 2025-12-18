@@ -79,7 +79,7 @@ def test_normalize_to_monthly_usd_yearly() -> None:
 
 
 def test_normalize_to_monthly_usd_missing_cadence() -> None:
-    """Test normalization with missing cadence."""
+    """Test normalization with missing cadence - now assumes one-time purchase."""
     parsed = ParsedPrice(
         amount=99.0,
         currency="USD",
@@ -88,8 +88,9 @@ def test_normalize_to_monthly_usd_missing_cadence() -> None:
     )
 
     normalized = normalize_to_monthly_usd(parsed)
-    assert normalized.monthly_usd == 0.0
-    assert "Missing cadence" in " ".join(normalized.gaps)
+    # Missing cadence is now assumed to be one-time purchase
+    assert normalized.monthly_usd == 99.0
+    assert len(normalized.gaps) == 0
 
 
 def test_normalize_to_monthly_usd_per_seat_without_count() -> None:
@@ -156,3 +157,33 @@ def test_detect_cadence_none() -> None:
     """Test cadence detection when not present."""
     assert detect_cadence("$99") is None
     assert detect_cadence("Contact us") is None
+
+
+def test_parse_price_with_context() -> None:
+    """Test parsing price with context to detect cadence."""
+    # Price without cadence in text itself
+    price_text = "$20"
+    context = "Platinum plan costs $20 per month. Billed monthly."
+    price = parse_price(price_text, context=context)
+    assert price is not None
+    assert price.amount == 20.0
+    assert price.cadence == "month"  # Should detect from context
+
+
+def test_parse_price_with_context_yearly() -> None:
+    """Test parsing price with yearly context."""
+    price_text = "$240"
+    context = "Annual subscription: $240 per year. Save 20%!"
+    price = parse_price(price_text, context=context)
+    assert price is not None
+    assert price.amount == 240.0
+    assert price.cadence == "year"  # Should detect from context
+
+
+def test_parse_price_context_priority() -> None:
+    """Test that price text cadence takes priority over context."""
+    price_text = "$20/month"
+    context = "This is billed yearly"  # Context says yearly, but price says monthly
+    price = parse_price(price_text, context=context)
+    assert price is not None
+    assert price.cadence == "month"  # Price text should take priority

@@ -26,39 +26,47 @@ def generate_markdown_report(verdict: PricingVerdict, output_path: Path) -> None
     product = verdict.evidence_bundle.product_input
 
     report_lines = [
-        "# Pricing Analysis Report",
+        "# 💰 Pricing Analysis Report",
         "",
-        f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"<div align='right'>📅 **Generated:** `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`</div>",
         "",
         "---",
         "",
-        "## Inputs",
+        "## 📋 Inputs",
         "",
-        f"- **Product Name:** {product.name}",
-        f"- **Product URL:** {product.url}",
-        f"- **Current Price:** {product.current_price}",
+        f"| **Field** | **Value** |",
+        "|-----------|-----------|",
+        f"| 🏷️ **Product Name** | `{product.name}` |",
+        f"| 🔗 **Product URL** | [{product.url}]({product.url}) |",
+        f"| 💵 **Current Price** | **`{product.current_price}`** |",
         "",
     ]
 
     if product.competitor_urls:
         report_lines.extend(
             [
-                "### Competitor URLs Provided",
+                "### 🎯 Competitor URLs Provided",
                 "",
             ]
         )
         for url in product.competitor_urls:
-            report_lines.append(f"- {url}")
+            report_lines.append(f"- 🔗 [{url}]({url})")
         report_lines.append("")
 
-    # Evidence summary
+    # Evidence summary with visual KPI cards
+    sources_count = len(verdict.evidence_bundle.tavily_sources)
+    competitors_analyzed = len(verdict.evidence_bundle.competitor_pricing)
+    comparable_count = verdict.competitor_count
+    
     report_lines.extend(
         [
-            "## Evidence Summary",
+            "## 📊 Evidence Summary",
             "",
-            f"- **Sources Retrieved:** {len(verdict.evidence_bundle.tavily_sources)}",
-            f"- **Competitors Analyzed:** {len(verdict.evidence_bundle.competitor_pricing)}",
-            f"- **Comparable Competitors:** {verdict.competitor_count}",
+            "| **Metric** | **Value** | **Status** |",
+            "|------------|-----------|------------|",
+            f"| 🔍 **Sources Retrieved** | `{sources_count}` | {'✅' if sources_count >= 10 else '⚠️' if sources_count >= 5 else '❌'} |",
+            f"| 🏢 **Competitors Analyzed** | `{competitors_analyzed}` | {'✅' if competitors_analyzed >= 5 else '⚠️' if competitors_analyzed >= 2 else '❌'} |",
+            f"| ⚖️ **Comparable Competitors** | `{comparable_count}` | {'✅' if comparable_count >= 2 else '⚠️'} |",
             "",
         ]
     )
@@ -71,12 +79,25 @@ def generate_markdown_report(verdict: PricingVerdict, output_path: Path) -> None
     ]
 
     if comparable:
+        # Determine if prices are one-time or recurring
+        # Check if ALL comparable prices are one-time, or if any are recurring
+        cadences = [cp.cadence for cp in comparable if cp.cadence]
+        is_one_time = len(cadences) > 0 and all(c == "one-time" for c in cadences)
+        price_label = "Price (One-time USD)" if is_one_time else "Normalized (Monthly USD)"
+        
+        # Calculate price range for context
+        prices = [cp.normalized_monthly_usd for cp in comparable if cp.normalized_monthly_usd is not None]
+        min_price_val = min(prices) if prices else 0
+        max_price_val = max(prices) if prices else 0
+        
         report_lines.extend(
             [
-                "## Competitor Comparison",
+                "## 💼 Competitor Comparison",
                 "",
-                "| Competitor | Price | Normalized (Monthly USD) | Evidence |",
-                "|------------|-------|---------------------------|----------|",
+                f"**Price Range:** ${min_price_val:.2f} - ${max_price_val:.2f}",
+                "",
+                f"| 🏢 **Competitor** | 💵 **Price** | 📈 **{price_label}** | 📄 **Evidence** |",
+                "|------------------|---------------|------------------------|----------------|",
             ]
         )
 
@@ -84,79 +105,127 @@ def generate_markdown_report(verdict: PricingVerdict, output_path: Path) -> None
             price_text = cp.extracted_price_texts[0] if cp.extracted_price_texts else "N/A"
             normalized = f"${cp.normalized_monthly_usd:.2f}" if cp.normalized_monthly_usd else "N/A"
             evidence_count = len(cp.evidence_snippets)
+            evidence_indicator = "📊" * min(evidence_count, 3)  # Visual indicator for evidence strength
             report_lines.append(
-                f"| {cp.domain} | {price_text} | {normalized} | {evidence_count} snippet(s) |"
+                f"| `{cp.domain}` | `{price_text}` | **{normalized}** | {evidence_count} snippet(s) {evidence_indicator} |"
             )
 
         report_lines.append("")
 
-    # Verdict
+    # Verdict with enhanced visual display
     status_emoji = {
         "UNDERPRICED": "✅",
         "FAIR": "⚖️",
         "OVERPRICED": "⚠️",
         "UNDETERMINABLE": "❓",
     }
+    
+    status_badge = {
+        "UNDERPRICED": "🟢",
+        "FAIR": "🟡",
+        "OVERPRICED": "🔴",
+        "UNDETERMINABLE": "⚪",
+    }
+    
+    # Create visual confidence bar
+    confidence_percent = int(verdict.confidence * 100)
+    confidence_bar_length = 20
+    filled_bars = int(confidence_percent / 100 * confidence_bar_length)
+    confidence_bar = "█" * filled_bars + "░" * (confidence_bar_length - filled_bars)
+    
+    confidence_color = "🟢" if verdict.confidence >= 0.8 else "🟡" if verdict.confidence >= 0.5 else "🔴"
 
     report_lines.extend(
         [
-            "## Verdict",
+            "## ⚖️ Verdict",
             "",
-            f"**Status:** {status_emoji.get(verdict.status.value, '')} {verdict.status.value}",
+            f"### {status_badge.get(verdict.status.value, '')} **{verdict.status.value}** {status_emoji.get(verdict.status.value, '')}",
             "",
-            f"**Confidence:** {verdict.confidence:.1%}",
+            f"**Confidence:** {confidence_color} `{verdict.confidence:.1%}`",
             "",
-            "### Key Reasons",
+            f"`{confidence_bar}` {confidence_percent}%",
+            "",
+            "### 🔑 Key Reasons",
             "",
         ]
     )
 
-    for reason in verdict.key_reasons:
-        report_lines.append(f"- {reason}")
+    for i, reason in enumerate(verdict.key_reasons, 1):
+        report_lines.append(f"{i}. {reason}")
 
     report_lines.append("")
 
-    # Recommendation
+    # Recommendation with enhanced formatting
     recommendation = _generate_recommendation(verdict)
     if recommendation:
         report_lines.extend(
             [
-                "## Recommendation",
+                "## 💡 Recommendation",
+                "",
+                "<div style='background-color: #f0f8ff; padding: 15px; border-left: 4px solid #0066cc; border-radius: 5px;'>",
                 "",
                 recommendation,
                 "",
+                "</div>",
+                "",
             ]
         )
 
-    # Gaps & limitations
+    # Gaps & limitations with visual warning
     if verdict.gaps:
         report_lines.extend(
             [
-                "## Gaps & Limitations",
+                "## ⚠️ Gaps & Limitations",
                 "",
-                "The following data gaps limit the confidence of this analysis:",
+                "> **Note:** The following data gaps limit the confidence of this analysis:",
                 "",
             ]
         )
 
+        # Aggregate duplicate gaps
+        gap_counts: dict[str, int] = {}
         for gap in verdict.gaps:
-            report_lines.append(f"- {gap}")
+            gap_counts[gap] = gap_counts.get(gap, 0) + 1
+
+        for gap, count in sorted(gap_counts.items()):
+            gap_icon = "🔴" if count > 3 else "🟡" if count > 1 else "🟢"
+            if count > 1:
+                report_lines.append(f"- {gap_icon} `{gap}` **({count}x)**")
+            else:
+                report_lines.append(f"- {gap_icon} `{gap}`")
 
         report_lines.append("")
+    else:
+        report_lines.extend(
+            [
+                "## ⚠️ Gaps & Limitations",
+                "",
+                "✅ **No major gaps detected.**",
+                "",
+            ]
+        )
 
-    # Citations
+    # Citations with enhanced formatting
     if verdict.citations:
         report_lines.extend(
             [
-                "## Citations",
+                "## 📚 Citations",
                 "",
-                "Sources used in this analysis:",
+                "**Sources used in this analysis:**",
                 "",
             ]
         )
 
         for i, citation in enumerate(verdict.citations[:20], 1):  # Limit to 20
-            report_lines.append(f"{i}. {citation}")
+            # Try to make citation clickable if it's a URL
+            citation_str = str(citation)  # Convert URL object to string if needed
+            if citation_str.startswith("http"):
+                report_lines.append(f"{i}. 🔗 [{citation_str}]({citation_str})")
+            else:
+                report_lines.append(f"{i}. 📄 {citation_str}")
+
+        if len(verdict.citations) > 20:
+            report_lines.append(f"\n*... and {len(verdict.citations) - 20} more sources*")
 
         report_lines.append("")
 
@@ -201,12 +270,13 @@ def _generate_recommendation(verdict: PricingVerdict) -> str:
     
     if verdict.status == VerdictStatus.UNDETERMINABLE:
         return (
-            f"**Nedoporučuje se** provádět změny ceny na základě současných dat. "
-            f"Analýza nenašla dostatek srovnatelných konkurentů (nalezeno: {verdict.competitor_count}, "
-            f"potřeba: minimálně 2). Doporučujeme:\n\n"
-            f"- Získat více dat o cenách konkurentů\n"
-            f"- Ověřit, zda jsou konkurenti skutečně srovnatelní s produktem {product.name}\n"
-            f"- Zvážit manuální průzkum trhu před rozhodnutím o ceně"
+            f"### ❓ **Nedoporučuje se** provádět změny ceny\n\n"
+            f"Analýza nenašla dostatek srovnatelných konkurentů (nalezeno: **{verdict.competitor_count}**, "
+            f"potřeba: minimálně **2**).\n\n"
+            f"**📋 Doporučené kroky:**\n\n"
+            f"- 🔍 Získat více dat o cenách konkurentů\n"
+            f"- ✅ Ověřit, zda jsou konkurenti skutečně srovnatelní s produktem `{product.name}`\n"
+            f"- 📊 Zvážit manuální průzkum trhu před rozhodnutím o ceně"
         )
     
     if not comparable:
@@ -220,6 +290,10 @@ def _generate_recommendation(verdict: PricingVerdict) -> str:
     avg_competitor_price = sum(competitor_prices) / len(competitor_prices)
     min_price = min(competitor_prices)
     max_price = max(competitor_prices)
+    
+    # Check if prices are one-time purchases
+    is_one_time = any(cp.cadence == "one-time" for cp in comparable if cp.cadence)
+    price_unit = "" if is_one_time else "/měsíc"
     
     # Parse current price to get numeric value
     from ptm.parsing import parse_price, normalize_to_monthly_usd
@@ -239,42 +313,47 @@ def _generate_recommendation(verdict: PricingVerdict) -> str:
     if verdict.status == VerdictStatus.UNDERPRICED:
         recommended_price = avg_competitor_price * 0.9  # 90% of average (conservative)
         return (
-            f"**Doporučení: Zvážit zvýšení ceny**\n\n"
-            f"Současná cena produktu {product.name} (${current_price:.2f}/měsíc) je výrazně nižší než průměrná cena "
-            f"konkurentů (${avg_competitor_price:.2f}/měsíc). Rozdíl činí {abs(price_diff_percent):.1f}%.\n\n"
-            f"**Doporučená akce:**\n"
-            f"- Zvážit zvýšení ceny na přibližně **${recommended_price:.2f}/měsíc** (90% průměru konkurentů)\n"
-            f"- Toto by stále ponechalo produkt konkurenceschopný, ale lépe reflektovalo tržní hodnotu\n"
-            f"- Rozsah cen konkurentů: ${min_price:.2f} - ${max_price:.2f}/měsíc\n\n"
-            f"**Poznámka:** Před změnou ceny zvažte další faktory jako hodnotu produktu, cílovou skupinu, "
-            f"a obchodní strategii. Důvěra v tuto analýzu: {verdict.confidence:.1%}."
+            f"### ✅ **Doporučení: Zvážit zvýšení ceny**\n\n"
+            f"**📊 Současná situace:**\n\n"
+            f"- 💵 Vaše cena: **`${current_price:.2f}{price_unit}`**\n"
+            f"- 📈 Průměr konkurentů: **`${avg_competitor_price:.2f}{price_unit}`**\n"
+            f"- 📉 Rozdíl: **`{abs(price_diff_percent):.1f}%`** nižší než průměr\n\n"
+            f"**🎯 Doporučená akce:**\n\n"
+            f"- 💰 Zvážit zvýšení ceny na přibližně **`${recommended_price:.2f}{price_unit}`** (90% průměru konkurentů)\n"
+            f"- ✅ Toto by stále ponechalo produkt konkurenceschopný, ale lépe reflektovalo tržní hodnotu\n"
+            f"- 📊 Rozsah cen konkurentů: **`${min_price:.2f} - ${max_price:.2f}{price_unit}`**\n\n"
+            f"**⚠️ Poznámka:** Před změnou ceny zvažte další faktory jako hodnotu produktu, cílovou skupinu, "
+            f"a obchodní strategii. Důvěra v tuto analýzu: **{verdict.confidence:.1%}**."
         )
     
     elif verdict.status == VerdictStatus.OVERPRICED:
         recommended_price = avg_competitor_price * 1.1  # 110% of average (slightly above)
         return (
-            f"**Doporučení: Zvážit snížení ceny**\n\n"
-            f"Současná cena produktu {product.name} (${current_price:.2f}/měsíc) je výrazně vyšší než průměrná cena "
-            f"konkurentů (${avg_competitor_price:.2f}/měsíc). Rozdíl činí {price_diff_percent:.1f}%.\n\n"
-            f"**Doporučená akce:**\n"
-            f"- Zvážit snížení ceny na přibližně **${recommended_price:.2f}/měsíc** (110% průměru konkurentů)\n"
-            f"- Toto by produkt přiblížilo k tržnímu průměru, ale zachovalo by prémiovou pozici\n"
-            f"- Rozsah cen konkurentů: ${min_price:.2f} - ${max_price:.2f}/měsíc\n\n"
-            f"**Poznámka:** Pokud produkt nabízí výrazně lepší hodnotu než konkurenti, může být vyšší cena oprávněná. "
-            f"Zvažte komunikaci hodnoty zákazníkům. Důvěra v tuto analýzu: {verdict.confidence:.1%}."
+            f"### ⚠️ **Doporučení: Zvážit snížení ceny**\n\n"
+            f"**📊 Současná situace:**\n\n"
+            f"- 💵 Vaše cena: **`${current_price:.2f}{price_unit}`**\n"
+            f"- 📈 Průměr konkurentů: **`${avg_competitor_price:.2f}{price_unit}`**\n"
+            f"- 📉 Rozdíl: **`{price_diff_percent:.1f}%`** vyšší než průměr\n\n"
+            f"**🎯 Doporučená akce:**\n\n"
+            f"- 💰 Zvážit snížení ceny na přibližně **`${recommended_price:.2f}{price_unit}`** (110% průměru konkurentů)\n"
+            f"- ✅ Toto by produkt přiblížilo k tržnímu průměru, ale zachovalo by prémiovou pozici\n"
+            f"- 📊 Rozsah cen konkurentů: **`${min_price:.2f} - ${max_price:.2f}{price_unit}`**\n\n"
+            f"**💡 Poznámka:** Pokud produkt nabízí výrazně lepší hodnotu než konkurenti, může být vyšší cena oprávněná. "
+            f"Zvažte komunikaci hodnoty zákazníkům. Důvěra v tuto analýzu: **{verdict.confidence:.1%}**."
         )
     
     elif verdict.status == VerdictStatus.FAIR:
         return (
-            f"**Doporučení: Ponechat současnou cenu**\n\n"
-            f"Současná cena produktu {product.name} (${current_price:.2f}/měsíc) je v rozumném rozsahu "
-            f"ve srovnání s konkurenty (průměr: ${avg_competitor_price:.2f}/měsíc, "
-            f"rozsah: ${min_price:.2f} - ${max_price:.2f}/měsíc).\n\n"
-            f"**Doporučená akce:**\n"
-            f"- **Ponechat současnou cenu** - je konkurenceschopná a odpovídá tržnímu průměru\n"
-            f"- Monitorovat změny cen konkurentů v budoucnu\n"
-            f"- Zaměřit se na zlepšení hodnoty produktu spíše než na změnu ceny\n\n"
-            f"**Poznámka:** Důvěra v tuto analýzu: {verdict.confidence:.1%}. "
+            f"### ✅ **Doporučení: Ponechat současnou cenu**\n\n"
+            f"**📊 Současná situace:**\n\n"
+            f"- 💵 Vaše cena: **`${current_price:.2f}{price_unit}`**\n"
+            f"- 📈 Průměr konkurentů: **`${avg_competitor_price:.2f}{price_unit}`**\n"
+            f"- 📊 Rozsah cen: **`${min_price:.2f} - ${max_price:.2f}{price_unit}`**\n\n"
+            f"**🎯 Doporučená akce:**\n\n"
+            f"- ✅ **Ponechat současnou cenu** - je konkurenceschopná a odpovídá tržnímu průměru\n"
+            f"- 👀 Monitorovat změny cen konkurentů v budoucnu\n"
+            f"- 🚀 Zaměřit se na zlepšení hodnoty produktu spíše než na změnu ceny\n\n"
+            f"**💡 Poznámka:** Důvěra v tuto analýzu: **{verdict.confidence:.1%}**. "
             f"Pokud má produkt unikátní vlastnosti nebo vyšší hodnotu, může být oprávněná i mírně vyšší cena."
         )
     

@@ -71,31 +71,45 @@ def build_price_comparison_data(data: dict[str, Any]) -> tuple[pd.DataFrame, flo
     product_input = evidence_bundle.get("product_input", {})
     competitor_pricing = evidence_bundle.get("competitor_pricing", [])
     
-    # Get current product price
-    current_price_str = product_input.get("current_price", "")
+    # Get current product price - try to extract from key_reasons first (most reliable)
     current_price = None
+    key_reasons = verdict.get("key_reasons", [])
     
-    # Try to parse current price using ptm.parsing if available, otherwise use simple regex
-    if current_price_str:
-        try:
-            # Try using ptm.parsing module (more robust)
-            from ptm.parsing import normalize_to_monthly_usd, parse_price
-            
-            parsed = parse_price(current_price_str)
-            if parsed:
-                normalized = normalize_to_monthly_usd(parsed)
-                if normalized.monthly_usd and normalized.monthly_usd > 0:
-                    current_price = normalized.monthly_usd
-        except (ImportError, AttributeError, ValueError):
-            # Fallback to simple regex extraction
-            try:
-                import re
-                # Look for $X/month pattern
-                match = re.search(r'\$([\d.]+)/month', current_price_str, re.IGNORECASE)
-                if match:
+    # Extract from key_reasons if available (e.g., "Current price ($4.00/month)")
+    if key_reasons:
+        import re
+        for reason in key_reasons:
+            match = re.search(r'\$([\d.]+)/month', reason)
+            if match:
+                try:
                     current_price = float(match.group(1))
-            except (ValueError, AttributeError):
-                pass
+                    break
+                except ValueError:
+                    pass
+    
+    # Fallback: parse from current_price string
+    if current_price is None:
+        current_price_str = product_input.get("current_price", "")
+        if current_price_str:
+            try:
+                # Try using ptm.parsing module (more robust)
+                from ptm.parsing import normalize_to_monthly_usd, parse_price
+                
+                parsed = parse_price(current_price_str)
+                if parsed:
+                    normalized = normalize_to_monthly_usd(parsed)
+                    if normalized.monthly_usd and normalized.monthly_usd > 0:
+                        current_price = normalized.monthly_usd
+            except (ImportError, AttributeError, ValueError):
+                # Fallback to simple regex extraction
+                try:
+                    import re
+                    # Look for $X/month pattern
+                    match = re.search(r'\$([\d.]+)/month', current_price_str, re.IGNORECASE)
+                    if match:
+                        current_price = float(match.group(1))
+                except (ValueError, AttributeError):
+                    pass
     
     # Build competitor data (only with normalized prices)
     rows = []
@@ -144,3 +158,42 @@ def get_product_info(data: dict[str, Any]) -> dict[str, Any]:
         "url": product_input.get("url", ""),
         "current_price": product_input.get("current_price", "N/A"),
     }
+
+
+def calculate_price_statistics(comparison_df: pd.DataFrame, current_price: float | None) -> dict[str, Any]:
+    """Calculate price statistics for competitors.
+    
+    Args:
+        comparison_df: DataFrame with price comparison data
+        current_price: Current product price (optional)
+        
+    Returns:
+        Dictionary with statistics
+    """
+    competitor_prices = comparison_df[comparison_df["Is Product"] == False]["Price (USD/month)"]
+    
+    if competitor_prices.empty:
+        return {}
+    
+    stats = {
+        "count": len(competitor_prices),
+        "mean": competitor_prices.mean(),
+        "median": competitor_prices.median(),
+        "min": competitor_prices.min(),
+        "max": competitor_prices.max(),
+        "std": competitor_prices.std(),
+    }
+    
+    # Add quartiles
+    quartiles = competitor_prices.quantile([0.25, 0.5, 0.75])
+    stats["q25"] = quartiles[0.25]
+    stats["q75"] = quartiles[0.75]
+    
+    # Calculate position of current price if available
+    if current_price is not None:
+        stats["current_price"] = current_price
+        stats["current_vs_mean"] = current_price - stats["mean"]
+        stats["current_vs_mean_pct"] = ((current_price - stats["mean"]) / stats["mean"]) * 100 if stats["mean"] > 0 else 0
+        stats["current_percentile"] = (competitor_prices < current_price).sum() / len(competitor_prices) * 100
+    
+    return stats

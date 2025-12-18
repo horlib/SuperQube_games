@@ -50,13 +50,15 @@ class NormalizedPrice:
     gaps: list[str]
 
 
-def parse_price(text: str) -> ParsedPrice | None:
+def parse_price(text: str, context: str | None = None) -> ParsedPrice | None:
     """Parse price from text string.
 
     Only parses if explicitly stated. Does not guess or infer.
+    If context is provided, uses it to help detect cadence.
 
     Args:
         text: Price text (e.g., "$99/month", "€50 per month", "£30/year")
+        context: Optional context text (e.g., snippet) to help detect cadence
 
     Returns:
         ParsedPrice if parsing successful, None otherwise
@@ -116,9 +118,11 @@ def parse_price(text: str) -> ParsedPrice | None:
         currency = currency_code_match.group(1).upper()
 
     # Extract cadence
+    # First check the price text itself, then check context if provided
     cadence = None
     text_lower = text.lower()
-
+    
+    # Check price text first
     if any(term in text_lower for term in ["/month", "per month", "/mo", "monthly"]):
         cadence = "month"
     elif any(term in text_lower for term in ["/year", "per year", "/yr", "yearly", "annually"]):
@@ -127,6 +131,30 @@ def parse_price(text: str) -> ParsedPrice | None:
         cadence = "day"
     elif any(term in text_lower for term in ["/week", "per week", "weekly"]):
         cadence = "week"
+    elif any(term in text_lower for term in ["one-time", "one time", "one-time purchase", "one-time payment", "single payment"]):
+        cadence = "one-time"
+    
+    # If cadence not found in price text, check context
+    if not cadence and context:
+        context_lower = context.lower()
+        # Look for cadence indicators near the price in context
+        # Check within 50 characters before and after the price text
+        price_pos = context_lower.find(text_lower)
+        if price_pos >= 0:
+            start = max(0, price_pos - 50)
+            end = min(len(context_lower), price_pos + len(text_lower) + 50)
+            context_around_price = context_lower[start:end]
+            
+            if any(term in context_around_price for term in ["/month", "per month", "/mo", "monthly", "billed monthly"]):
+                cadence = "month"
+            elif any(term in context_around_price for term in ["/year", "per year", "/yr", "yearly", "annually", "billed yearly", "billed annually"]):
+                cadence = "year"
+            elif any(term in context_around_price for term in ["/day", "per day", "daily"]):
+                cadence = "day"
+            elif any(term in context_around_price for term in ["/week", "per week", "weekly"]):
+                cadence = "week"
+            elif any(term in context_around_price for term in ["one-time", "one time", "one-time purchase", "one-time payment", "single payment", "buy now", "purchase"]):
+                cadence = "one-time"
 
     # Check for per-seat pricing
     per_seat = any(
@@ -170,14 +198,12 @@ def normalize_to_monthly_usd(
     fx_rates = fx_rates or DEFAULT_FX_RATES
 
     # Check cadence
+    # Allow one-time prices without cadence (assume one-time if no cadence detected)
+    # This enables comparison of one-time purchase prices
     if not parsed_price.cadence:
-        gaps.append("Missing cadence (month/year unknown)")
-        return NormalizedPrice(
-            monthly_usd=0.0,
-            original_price=parsed_price,
-            normalization_method="failed",
-            gaps=gaps,
-        )
+        # For prices without explicit cadence, assume one-time purchase
+        # This allows comparison of physical products and one-time purchases
+        parsed_price.cadence = "one-time"
 
     # Check FX rate
     if parsed_price.currency not in fx_rates:
@@ -213,6 +239,10 @@ def normalize_to_monthly_usd(
         amount_monthly = amount_usd * 30  # Approximate
     elif parsed_price.cadence == "week":
         amount_monthly = amount_usd * 4.33  # Approximate
+    elif parsed_price.cadence == "one-time":
+        # For one-time purchases, we keep the full amount (no conversion to monthly)
+        # This allows comparison of one-time prices with one-time prices
+        amount_monthly = amount_usd
     else:  # month
         amount_monthly = amount_usd
 
@@ -247,5 +277,7 @@ def detect_cadence(text: str) -> str | None:
         return "day"
     elif any(term in text_lower for term in ["/week", "per week", "weekly"]):
         return "week"
+    elif any(term in text_lower for term in ["one-time", "one time", "one-time purchase", "one-time payment", "single payment"]):
+        return "one-time"
 
     return None

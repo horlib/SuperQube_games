@@ -53,6 +53,10 @@ class CompetitorPricing(BaseModel):
         None,
         description="Normalized price in monthly USD (only if all data available)",
     )
+    cadence: str | None = Field(
+        None,
+        description="Price cadence (month, year, day, week, one-time) if known",
+    )
     gaps: list[str] = Field(
         default_factory=list,
         description="List of gaps preventing normalization (e.g., 'missing cadence', 'missing FX rate')",
