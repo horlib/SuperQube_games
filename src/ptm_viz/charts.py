@@ -12,6 +12,7 @@ def create_price_comparison_chart(
     comparison_df: pd.DataFrame,
     product_name: str = "Your Product",
     competitor_details: dict[str, dict[str, Any]] | None = None,
+    verdict_status: str | None = None,
 ) -> go.Figure:
     """Create horizontal bar chart comparing product price vs competitors.
     
@@ -98,9 +99,28 @@ def create_price_comparison_chart(
             )
         )
     
-    # Add product bar (highlighted with glow effect)
+    # Add product bar (highlighted with color based on verdict status)
     if not product_row.empty:
         product_price = product_row["Price (USD/month)"].iloc[0]
+        
+        # Determine color based on verdict status
+        if verdict_status == "UNDERPRICED":
+            product_color = "#10B981"  # Green
+            product_line_color = "#059669"
+            text_color = "#047857"
+        elif verdict_status == "OVERPRICED":
+            product_color = "#EF4444"  # Red
+            product_line_color = "#DC2626"
+            text_color = "#B91C1C"
+        elif verdict_status == "FAIR":
+            product_color = "#3B82F6"  # Blue
+            product_line_color = "#2563EB"
+            text_color = "#1D4ED8"
+        else:  # UNDETERMINABLE or None
+            product_color = "#8B5CF6"  # Purple (neutral)
+            product_line_color = "#7C3AED"
+            text_color = "#6D28D9"
+        
         fig.add_trace(
             go.Bar(
                 y=product_row["Competitor"],
@@ -108,13 +128,13 @@ def create_price_comparison_chart(
                 orientation="h",
                 name=product_name,
                 marker=dict(
-                    color="#EF4444",
-                    line=dict(color="#DC2626", width=3),
+                    color=product_color,
+                    line=dict(color=product_line_color, width=3),
                     opacity=0.95,
                 ),
                 text=[f"${x:.2f} ⭐" for x in product_row["Price (USD/month)"]],
                 textposition="outside",
-                textfont=dict(size=13, color="#DC2626", family="Arial Black"),
+                textfont=dict(size=13, color=text_color, family="Arial Black"),
                 hovertemplate=f"<b>{product_name}</b><br>Price: <b>${product_price:.2f}/month</b><br><br>Your Product<extra></extra>",
             )
         )
@@ -199,7 +219,6 @@ def create_price_comparison_chart(
             font=dict(size=12, family="Arial"),
             bgcolor="rgba(255,255,255,0.8)",
             bordercolor="rgba(0,0,0,0.1)",
-            borderwidth=1,
         ),
         hovermode="closest",
         xaxis=dict(
@@ -221,7 +240,6 @@ def create_price_comparison_chart(
         hoverlabel=dict(
             bgcolor="rgba(255,255,255,0.95)",
             bordercolor="#667eea",
-            borderwidth=2,
             font_size=12,
             font_family="Arial",
         ),

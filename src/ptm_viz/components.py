@@ -387,11 +387,13 @@ def render_recommendation_panel(data: dict[str, Any]) -> None:
 
 
 def render_citations_list(data: dict[str, Any]) -> None:
-    """Render citations list with clickable links.
+    """Render citations list with clickable links, filtering, and better formatting.
     
     Args:
         data: Parsed report JSON
     """
+    from urllib.parse import urlparse
+    
     verdict = data.get("verdict", {})
     citations = verdict.get("citations", [])
     
@@ -409,37 +411,132 @@ def render_citations_list(data: dict[str, Any]) -> None:
     st.markdown("### 📚 Citations")
     st.markdown("<div style='color: #6b7280; margin-bottom: 1rem;'>Sources used in this analysis:</div>", unsafe_allow_html=True)
     
-    # Limit to 20 citations for readability
-    display_citations = citations[:20]
-    
-    # Create a styled list with enhanced effects
-    citations_html = "<div style='background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);'>"
-    for i, citation in enumerate(display_citations, 1):
+    # Parse citations and extract domains
+    parsed_citations = []
+    for citation in citations:
         citation_str = str(citation)
-        citations_html += f"""
+        try:
+            parsed = urlparse(citation_str)
+            domain = parsed.netloc.replace("www.", "")
+            path = parsed.path.strip("/")
+            
+            # Determine icon based on domain
+            icon = "🔗"
+            if "youtube.com" in domain or "youtu.be" in domain:
+                icon = "▶️"
+            elif "reddit.com" in domain:
+                icon = "💬"
+            elif "github.com" in domain:
+                icon = "💻"
+            elif "twitter.com" in domain or "x.com" in domain:
+                icon = "🐦"
+            elif "facebook.com" in domain:
+                icon = "👥"
+            elif "linkedin.com" in domain:
+                icon = "💼"
+            
+            # Create display text (domain + short path)
+            if path:
+                # Truncate long paths
+                if len(path) > 50:
+                    path = path[:47] + "..."
+                display_text = f"{domain}/{path}"
+            else:
+                display_text = domain
+            
+            parsed_citations.append({
+                "url": citation_str,
+                "domain": domain,
+                "display_text": display_text,
+                "icon": icon,
+            })
+        except Exception:
+            # Fallback if parsing fails
+            parsed_citations.append({
+                "url": citation_str,
+                "domain": citation_str[:50] + "..." if len(citation_str) > 50 else citation_str,
+                "display_text": citation_str[:80] + "..." if len(citation_str) > 80 else citation_str,
+                "icon": "🔗",
+            })
+    
+    # Filtering options
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        search_term = st.text_input("🔍 Search citations", placeholder="Filter by domain or URL...", key="citation_search")
+    with col2:
+        show_all = st.checkbox("Show all", value=False, key="show_all_citations")
+    
+    # Apply filter
+    filtered_citations = parsed_citations
+    if search_term:
+        filtered_citations = [
+            c for c in parsed_citations
+            if search_term.lower() in c["url"].lower() or search_term.lower() in c["domain"].lower()
+        ]
+    
+    # Limit display
+    if not show_all:
+        display_citations = filtered_citations[:30]
+    else:
+        display_citations = filtered_citations
+    
+    if not display_citations:
+        st.info("No citations match your search criteria.")
+        return
+    
+    # Create a styled list - render each citation separately for better reliability
+    container_style = """
+    <style>
+        .citations-container {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+    </style>
+    """
+    st.markdown(container_style, unsafe_allow_html=True)
+    
+    for i, citation in enumerate(display_citations, 1):
+        # Escape special characters for HTML
+        import html
+        safe_url = html.escape(citation['url'], quote=False)  # Don't quote, use in href
+        safe_display = html.escape(citation['display_text'])
+        safe_full_url = html.escape(citation['url'])
+        
+        # Build HTML - use double quotes for href attribute, single quotes for styles
+        citation_html = f"""
         <div style='padding: 1rem; margin: 0.75rem 0; border-left: 5px solid #667eea; border-radius: 8px; 
                     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
                     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-                    animation: fadeInUp 0.4s ease-out;
-                    animation-delay: {i * 0.05}s;
-                    animation-fill-mode: both;'>
-            <span style='color: #667eea; font-weight: 700; font-size: 1.1rem; margin-right: 0.75rem;'>{i}.</span>
-            <a href='{citation_str}' target='_blank' 
-               style='color: #3b82f6; text-decoration: none; font-weight: 500;
-                      transition: all 0.2s; display: inline-block;'
-               onmouseover="this.style.color='#667eea'; this.style.transform='translateX(4px)'"
-               onmouseout="this.style.color='#3b82f6'; this.style.transform='translateX(0)'">
-               {citation_str}
-            </a>
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.05);'>
+            <div style='display: flex; align-items: flex-start; gap: 0.75rem;'>
+                <span style='color: #667eea; font-weight: 700; font-size: 1rem; min-width: 2rem;'>{i}.</span>
+                <span style='font-size: 1.2rem; padding-top: 0.1rem;'>{citation['icon']}</span>
+                <div style='flex: 1;'>
+                    <a href='{citation['url']}' target='_blank' rel='noopener noreferrer'
+                       style='color: #3b82f6; text-decoration: none; font-weight: 500; font-size: 0.95rem;
+                              transition: all 0.2s; display: inline-block;'
+                       onmouseover="this.style.color='#667eea'; this.style.textDecoration='underline'"
+                       onmouseout="this.style.color='#3b82f6'; this.style.textDecoration='none'">
+                       {safe_display}
+                    </a>
+                    <div style='color: #9ca3af; font-size: 0.8rem; margin-top: 0.25rem; word-break: break-all;'>
+                        {safe_full_url}
+                    </div>
+                </div>
+            </div>
         </div>
         """
-    citations_html += "</div>"
+        st.markdown(citation_html, unsafe_allow_html=True)
     
-    st.markdown(citations_html, unsafe_allow_html=True)
-    
-    if len(citations) > 20:
-        st.markdown(f"<div style='color: #6b7280; margin-top: 1rem;'>Showing first 20 of {len(citations)} citations</div>", unsafe_allow_html=True)
+    # Show count info
+    if len(filtered_citations) != len(parsed_citations):
+        st.markdown(f"<div style='color: #6b7280; margin-top: 1rem;'>Showing {len(display_citations)} of {len(filtered_citations)} filtered citations (from {len(parsed_citations)} total)</div>", unsafe_allow_html=True)
+    elif len(filtered_citations) > len(display_citations):
+        st.markdown(f"<div style='color: #6b7280; margin-top: 1rem;'>Showing first {len(display_citations)} of {len(filtered_citations)} citations</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div style='color: #6b7280; margin-top: 1rem;'>{len(filtered_citations)} citation(s)</div>", unsafe_allow_html=True)
 
 
 def render_evidence_table(competitor_df: Any) -> None:

@@ -25,6 +25,30 @@ class ProductInput(BaseModel):
         default_factory=list,
         description="Optional list of competitor URLs to check",
     )
+    category: str | None = Field(
+        None,
+        description="Product category (e.g., 'SaaS', 'Project Management', 'Design Tool')",
+    )
+    target_customer: str | None = Field(
+        None,
+        description="Target customer segment (e.g., 'Small Business', 'Enterprise', 'Individual')",
+    )
+    key_features: list[str] = Field(
+        default_factory=list,
+        description="Key features or capabilities of the product",
+    )
+    problem_statement: str | None = Field(
+        None,
+        description="Specific problem that the product solves (e.g., 'Manage team tasks and collaboration')",
+    )
+    decision_context: str | None = Field(
+        None,
+        description="Decision context: who decides, when, why (e.g., 'Marketing teams choosing tools for content creation')",
+    )
+    payment_model: str | None = Field(
+        None,
+        description="Payment model (e.g., 'subscription', 'one-time', 'per-seat', 'usage-based', 'freemium')",
+    )
 
 
 class TavilySource(BaseModel):
@@ -60,6 +84,35 @@ class CompetitorPricing(BaseModel):
     gaps: list[str] = Field(
         default_factory=list,
         description="List of gaps preventing normalization (e.g., 'missing cadence', 'missing FX rate')",
+    )
+    # Product attributes for better competitor matching
+    category: str | None = Field(
+        None,
+        description="Product category extracted from sources",
+    )
+    target_customer: str | None = Field(
+        None,
+        description="Target customer segment extracted from sources",
+    )
+    key_features: list[str] = Field(
+        default_factory=list,
+        description="Key features extracted from sources",
+    )
+    product_description: str | None = Field(
+        None,
+        description="Brief product description extracted from sources",
+    )
+    problem_statement: str | None = Field(
+        None,
+        description="Specific problem that the competitor product solves",
+    )
+    decision_context: str | None = Field(
+        None,
+        description="Decision context: who decides, when, why",
+    )
+    payment_model: str | None = Field(
+        None,
+        description="Payment model (e.g., 'subscription', 'one-time', 'per-seat', 'usage-based')",
     )
 
     @field_validator("normalized_monthly_usd")

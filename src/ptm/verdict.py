@@ -3,6 +3,7 @@
 
 
 from ptm.aggregation import get_comparable_competitors
+from ptm.extraction import extract_product_attributes
 from ptm.parsing import normalize_to_monthly_usd, parse_price
 from ptm.schemas import (
     EvidenceBundle,
@@ -65,8 +66,52 @@ def compute_verdict(
 
     current_monthly_usd = current_normalized.monthly_usd
 
-    # Get comparable competitors
-    comparable_competitors = get_comparable_competitors(evidence_bundle.competitor_pricing)
+    # Auto-extract product attributes from sources if not provided
+    product_category = product_input.category
+    product_target_customer = product_input.target_customer
+    product_key_features = product_input.key_features if product_input.key_features else []
+    product_problem_statement = product_input.problem_statement
+    product_decision_context = product_input.decision_context
+    product_payment_model = product_input.payment_model
+    
+    if not (product_category and product_target_customer and product_key_features and 
+            product_problem_statement and product_decision_context and product_payment_model):
+        # Extract attributes from product-related sources (first few sources usually about the product)
+        product_sources = evidence_bundle.tavily_sources[:5]  # Use first 5 sources
+        extracted_attrs = extract_product_attributes(product_sources)
+        
+        if not product_category and extracted_attrs.get("category"):
+            product_category = extracted_attrs["category"]
+        if not product_target_customer and extracted_attrs.get("target_customer"):
+            product_target_customer = extracted_attrs["target_customer"]
+        if not product_key_features and extracted_attrs.get("key_features"):
+            product_key_features = extracted_attrs["key_features"]
+        if not product_problem_statement and extracted_attrs.get("problem_statement"):
+            product_problem_statement = extracted_attrs["problem_statement"]
+        if not product_decision_context and extracted_attrs.get("decision_context"):
+            product_decision_context = extracted_attrs["decision_context"]
+        if not product_payment_model and extracted_attrs.get("payment_model"):
+            product_payment_model = extracted_attrs["payment_model"]
+
+    # Get comparable competitors (filtered by competitive group criteria)
+    # Products belong to the same competitive group when they:
+    # 1. Solve the same specific problem
+    # 2. Have the same decision context
+    # 3. Have comparable price
+    # 4. Have unifiable payment form
+    comparable_competitors = get_comparable_competitors(
+        evidence_bundle.competitor_pricing,
+        current_price_usd=current_monthly_usd,
+        price_similarity_factor=5.0,  # Stricter: Allow 0.2x to 5x price range
+        product_category=product_category,
+        product_target_customer=product_target_customer,
+        product_key_features=product_key_features if product_key_features else None,
+        product_name=product_input.name,
+        product_problem_statement=product_problem_statement,
+        product_decision_context=product_decision_context,
+        product_payment_model=product_payment_model,
+        min_similarity_threshold=0.4,  # Require at least 40% similarity (stricter)
+    )
 
     # Check if we have enough competitors
     if len(comparable_competitors) < 2:

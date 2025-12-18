@@ -112,10 +112,18 @@ def build_price_comparison_data(data: dict[str, Any]) -> tuple[pd.DataFrame, flo
                     pass
     
     # Build competitor data (only with normalized prices)
+    # Apply price similarity filtering if current_price is available
     rows = []
     for cp in competitor_pricing:
         normalized = cp.get("normalized_monthly_usd")
         if normalized is not None:
+            # Filter by price similarity (0.1x to 10x current price) if current_price available
+            if current_price is not None and current_price > 0:
+                min_price = current_price / 10.0  # 0.1x
+                max_price = current_price * 10.0  # 10x
+                if normalized < min_price or normalized > max_price:
+                    continue  # Skip competitors outside price range
+            
             rows.append({
                 "Competitor": cp.get("domain", "Unknown"),
                 "Price (USD/month)": normalized,

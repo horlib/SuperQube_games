@@ -599,10 +599,14 @@ if report_path and report_path.exists():
                             "source_url": row.get("Source URL", ""),
                         }
                 
+                # Get verdict status for color coding
+                verdict_status = data.get("verdict", {}).get("status")
+                
                 chart = create_price_comparison_chart(
                     comparison_df,
                     product_name=product_info["name"],
                     competitor_details=competitor_details if competitor_details else None,
+                    verdict_status=verdict_status,
                 )
                 st.plotly_chart(chart, use_container_width=True)
                 
@@ -701,12 +705,6 @@ if report_path and report_path.exists():
             # Evidence table
             competitor_df = build_competitor_table(data)
             render_evidence_table(competitor_df)
-            
-            st.markdown("<hr>", unsafe_allow_html=True)
-            
-            # Gaps panel
-            st.markdown("### ⚠️ Gaps & Limitations")
-            render_gaps_panel(data)
             
             st.markdown("<hr>", unsafe_allow_html=True)
             

@@ -186,11 +186,6 @@ def run(
             for reason in verdict.key_reasons:
                 console.print(f"  - {reason}")
 
-        if verdict.gaps:
-            console.print("\n[yellow]Gaps & Limitations:[/yellow]")
-            for gap in verdict.gaps[:5]:  # Show first 5
-                console.print(f"  - {gap}")
-
         # Generate reports
         console.print(f"\n[yellow]Generating reports in {outdir}...[/yellow]")
         outdir.mkdir(parents=True, exist_ok=True)

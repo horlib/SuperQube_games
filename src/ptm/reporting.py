@@ -16,7 +16,6 @@ def generate_markdown_report(verdict: PricingVerdict, output_path: Path) -> None
     - Competitor comparison table
     - Verdict
     - Recommendation (verbal recommendation based on verdict)
-    - Gaps & limitations
     - Citations
 
     Args:
@@ -167,40 +166,6 @@ def generate_markdown_report(verdict: PricingVerdict, output_path: Path) -> None
                 recommendation,
                 "",
                 "</div>",
-                "",
-            ]
-        )
-
-    # Gaps & limitations with visual warning
-    if verdict.gaps:
-        report_lines.extend(
-            [
-                "## ⚠️ Gaps & Limitations",
-                "",
-                "> **Note:** The following data gaps limit the confidence of this analysis:",
-                "",
-            ]
-        )
-
-        # Aggregate duplicate gaps
-        gap_counts: dict[str, int] = {}
-        for gap in verdict.gaps:
-            gap_counts[gap] = gap_counts.get(gap, 0) + 1
-
-        for gap, count in sorted(gap_counts.items()):
-            gap_icon = "🔴" if count > 3 else "🟡" if count > 1 else "🟢"
-            if count > 1:
-                report_lines.append(f"- {gap_icon} `{gap}` **({count}x)**")
-            else:
-                report_lines.append(f"- {gap_icon} `{gap}`")
-
-        report_lines.append("")
-    else:
-        report_lines.extend(
-            [
-                "## ⚠️ Gaps & Limitations",
-                "",
-                "✅ **No major gaps detected.**",
                 "",
             ]
         )

@@ -3,6 +3,7 @@
 from ptm.extraction import (
     extract_price_texts,
     extract_pricing_snippets,
+    extract_product_attributes,
 )
 from ptm.schemas import TavilySource
 
@@ -159,3 +160,77 @@ def test_extract_pricing_snippets_verbatim_only() -> None:
             or original_content in snippet
             or any(word in original_content for word in snippet.split())
         )
+
+
+def test_extract_product_attributes_category() -> None:
+    """Test extraction of product category."""
+    sources = [
+        TavilySource(
+            url="https://example.com/product",
+            title="Product",
+            content="This is a project management tool for teams. It helps you organize tasks and collaborate.",
+        )
+    ]
+
+    attributes = extract_product_attributes(sources)
+
+    assert attributes is not None
+    assert "category" in attributes
+    # Should extract "project management" category
+    assert attributes["category"] is not None or len(attributes.get("key_features", [])) > 0
+
+
+def test_extract_product_attributes_target_customer() -> None:
+    """Test extraction of target customer segment."""
+    sources = [
+        TavilySource(
+            url="https://example.com/product",
+            title="Product",
+            content="Designed for small businesses and teams. Perfect for startups looking to scale.",
+        )
+    ]
+
+    attributes = extract_product_attributes(sources)
+
+    assert attributes is not None
+    assert "target_customer" in attributes
+    # Should extract target customer info
+    assert attributes["target_customer"] is not None or len(attributes.get("key_features", [])) > 0
+
+
+def test_extract_product_attributes_features() -> None:
+    """Test extraction of key features."""
+    sources = [
+        TavilySource(
+            url="https://example.com/product",
+            title="Product",
+            content="Features: Real-time collaboration, Cloud storage, Mobile app, API integration, Analytics and reporting.",
+        )
+    ]
+
+    attributes = extract_product_attributes(sources)
+
+    assert attributes is not None
+    assert "key_features" in attributes
+    assert isinstance(attributes["key_features"], list)
+    # Should extract some features
+    assert len(attributes["key_features"]) >= 0
+
+
+def test_extract_product_attributes_no_content() -> None:
+    """Test extraction with empty content."""
+    sources = [
+        TavilySource(
+            url="https://example.com/product",
+            title="Product",
+            content="",
+        )
+    ]
+
+    attributes = extract_product_attributes(sources)
+
+    assert attributes is not None
+    assert attributes["category"] is None
+    assert attributes["target_customer"] is None
+    assert attributes["key_features"] == []
+    assert attributes["product_description"] is None

@@ -131,6 +131,8 @@ def parse_price(text: str, context: str | None = None) -> ParsedPrice | None:
         cadence = "day"
     elif any(term in text_lower for term in ["/week", "per week", "weekly"]):
         cadence = "week"
+    elif any(term in text_lower for term in ["/image", "per image", "/call", "per call", "/request", "per request", "/token", "per token", "/unit", "per unit", "/1k", "per 1k"]):
+        cadence = "usage-based"
     elif any(term in text_lower for term in ["one-time", "one time", "one-time purchase", "one-time payment", "single payment"]):
         cadence = "one-time"
     
@@ -243,6 +245,12 @@ def normalize_to_monthly_usd(
         # For one-time purchases, we keep the full amount (no conversion to monthly)
         # This allows comparison of one-time prices with one-time prices
         amount_monthly = amount_usd
+    elif parsed_price.cadence == "usage-based":
+        # For usage-based pricing, estimate monthly usage
+        # Assume moderate usage: 100 units/month for per-image/call pricing
+        # This allows comparison with subscription-based competitors
+        estimated_monthly_usage = 100
+        amount_monthly = amount_usd * estimated_monthly_usage
     else:  # month
         amount_monthly = amount_usd
 
@@ -279,5 +287,8 @@ def detect_cadence(text: str) -> str | None:
         return "week"
     elif any(term in text_lower for term in ["one-time", "one time", "one-time purchase", "one-time payment", "single payment"]):
         return "one-time"
+    elif any(term in text_lower for term in ["/image", "per image", "/call", "per call", "/request", "per request", "/token", "per token", "/unit", "per unit"]):
+        # Usage-based pricing - treat as per-unit
+        return "usage-based"
 
     return None
